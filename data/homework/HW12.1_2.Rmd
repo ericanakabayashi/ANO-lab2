@@ -1,0 +1,63 @@
+---
+title: "Unit 12 HW: The Classical Linear Model"
+output: 'pdf_document'  
+classoption: landscape
+---
+
+```{r setup, include=FALSE, warning=FALSE, message=FALSE}
+library(tidyverse)
+library(patchwork)
+library(car)
+library(lmtest)
+library(sandwich)
+library(stargazer)
+```
+
+```{r chunk options}
+knitr::opts_chunk$set(message=FALSE, dpi=300)
+```
+
+
+```{r get robust ses }
+rse <- function(model) { 
+  sqrt(diag(vcovHC(model)))
+  }
+```
+
+#Loading in the data
+
+```{r load-data, message=FALSE}
+videos <- read_delim("videos.txt", delim = "\t")
+glimpse(videos)
+```
+
+
+#creating the model
+
+```{r}
+model_one <- lm(mpg ~ disp + hp + wt + drat, data = mtcars)
+videos_model <-lm(log(views) ~ rate + length, data=videos)
+```
+
+- Q1.1 I.I.D. data
+
+>To assess IID data, we need to understand the sampling process used to collect the data. From the videos.txt documentation, we learned that the videos were selected initially from the set of videos included in "Recently Featured", "Most Viewed", "Top Rated", and "Most Discussed" from "Today", "This Week", "This Month" and All Time" on February 22nd, 2007. This totalled 189 unique videos followed by a "crawl" and this process was followed for the remaining data collected through 2008. The data collected was by video ID and includes the variables uploader, age, category, length, views, rate, ratings, comments, and related IDs extracted from the YouTube API. There are several reasons why this data collection process might not result in IID data, below. Thus, the assumption of IID data is not met.
+
+>- The primary focus of this data collection was on successful videos by collecting from the "Recently Featured", "Most Viewd", "Top Rated", and "Most Discussed" categories. This likely indicates that the data is not distributed as the population of all YouTube videos and is heavily weighted towards successful videos.
+>- Clustering may also be a factor in this data given that videos in the top categories are likely related to one another. They could be videos uploaded by the same user or very similar content.
+
+
+- Q1.2 No Perfect Collinearity
+
+> To evaluate collinearity, we can look at our coefficients, and notice that R has not dropped any variables. 
+
+```{r}
+videos_model$coefficients
+```
+
+> This tells us that there is no perfect collinearity between our variables. Perfect collinearity indicates that one data series can be exactly produced through a simple transformation from another. Intuitively, this also makes sense because you wouldn't expect the lenght of a video to be transformable to rate of a video and vice-versa.
+
+>This assumption also includes the requirement that a BLP exists, which may not happen if there are heavy tails.  In this case, though, we don't see any distributions that look like they have unusually low or high values.
+
+
+
