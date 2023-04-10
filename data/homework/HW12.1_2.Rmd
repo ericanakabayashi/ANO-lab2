@@ -27,16 +27,24 @@ rse <- function(model) {
 #Loading in the data
 
 ```{r load-data, message=FALSE}
+
 videos <- read_delim("videos.txt", delim = "\t")
-glimpse(videos)
+videosfilteredout <- videos %>% filter(!is.na(videos$views))
+
+glimpse(videosfilteredout)
+summary(videosfilteredout)
 ```
 
 
 #creating the model
 
 ```{r}
-model_one <- lm(mpg ~ disp + hp + wt + drat, data = mtcars)
-videos_model <-lm(log(views) ~ rate + length, data=videos)
+#model_one <- lm(mpg ~ disp + hp + wt + drat, data = mtcars)
+videos_model <-lm(log(views) ~ rate + length, data=videosfilteredout)
+
+videos_modelnotfitted <-lm(views ~ rate + length, data=videosfilteredout)
+
+
 ```
 
 - Q1.1 I.I.D. data
@@ -59,5 +67,59 @@ videos_model$coefficients
 
 >This assumption also includes the requirement that a BLP exists, which may not happen if there are heavy tails.  In this case, though, we don't see any distributions that look like they have unusually low or high values.
 
+1.3
+
+- Linear conditional expectation
+
+> To assess whether there is a linear conditional expectation, we've learned to look at the predicted vs. residuals of the model.
+
+```{r}
+
+#videos_model <-lm(log(views) ~ rate + length, data=videosfilteredout)
+
+videosfilteredout %>% 
+  mutate(
+    model_one_preds = predict(videos_model), 
+    model_one_resids = resid(videos_model)
+  ) %>% 
+  ggplot(aes(model_one_preds, model_one_resids)) + 
+  geom_point() + 
+  stat_smooth()
+
+videosfilteredout %>% 
+  mutate(
+    model_one_preds = predict(videos_model), 
+    model_one_resids = resid(videos_model)
+  ) %>% 
+  ggplot(aes(model_one_preds, log(videosfilteredout$views))) + 
+  geom_point() + 
+  stat_smooth()
+
+```
+```{r}
+
+# library
+library(ggplot2)
 
 
+#videos_model <-lm(log(views) ~ rate + length, data=videosfilteredout)
+ 
+
+
+ggplot(videosfilteredout, aes(x=videosfilteredout$rate, y=videosfilteredout$views)) + 
+    geom_point()
+
+ggplot(videosfilteredout, aes(x=videosfilteredout$length, y=videosfilteredout$views)) + 
+    geom_point()
+
+
+```
+
+On the far out right side of the Residual vs. Estimators graph above, it's possible to note that a non-linear relationship in this data, and on the far right end of the data our model seem to be producing underestimated data. In order to correct this, one could try variable transformations, hoping to end up with a more linear pattern in this plot. We would say that the requirement was no met.
+
+1.4 Homoskedastic Error
+
+```{r}
+plot(videos_model, which=3)
+```
+To assess whether the distribution of the errors is homoskedastic, we can examine the residuals versus fitted plot again.  By looking at the plot above, it does look like there might be some inbalance in the variance of the residuals at the upper side of the predicted values, but it is not severe, and could be explained by the rate being equal or more the zero. Over all it looks like the Homoskedastic Error could be assumed.
