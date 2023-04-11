@@ -9,6 +9,10 @@ library(patchwork)
 library(lmtest)
 library(sandwich)
 library(stargazer)
+
+library(gridExtra)
+library(lattice)
+
 ```
 
 ```{r chunk options, include=FALSE}
@@ -25,14 +29,17 @@ rse <- function(model) {
 
 videos <- read_delim("videos.txt", delim = "\t")
 videosfo <- videos %>% filter(!is.na(videos$views))
+videosclean <- videosfo[videosfo$rate>=1,]
+videosclean <- videosclean[videosclean$length<=660,]
 
 glimpse(videosfo)
-summary(videosfo)
+summary(videosclean)
 ```
 
 ```{r, include=FALSE}
+
 videos_model <-lm(log(views) ~ rate + length, data=videosfo)
-videos_model2 <-lm(views ~ rate + length, data=videosfo)
+videos_model_clean <-lm(log(views) ~ rate + length, data=videosclean)
 
 ```
 
@@ -42,32 +49,52 @@ plot(videos_model)
 
 **1.3 - Linear conditional expectation**
 
-```{r ggplot, out.width="50%", fig.cap="Linear Conditional Expectation on Precdicted vs Residuals", echo=FALSE, include=TRUE}
+```{r ggplot, out.width="70%", align = 'center', fig.cap="Predicted vs Residuals - Pre and Post Cleaning", echo=FALSE, include=TRUE}
 
-videosfo %>% 
-  mutate(
-    model_one_preds = predict(videos_model), 
-    model_one_resids = resid(videos_model)
-  ) %>% 
-  ggplot(aes(model_one_preds, model_one_resids)) + 
-  geom_point() + 
-  stat_smooth()
+plot1<- videosfo %>% 
+    mutate(
+      model_one_preds = predict(videos_model), 
+      model_one_resids = resid(videos_model)
+    ) %>% 
+    ggplot(aes(model_one_preds, model_one_resids)) + 
+    geom_point() + 
+    stat_smooth()
+
+plot2<- videosclean %>% 
+    mutate(
+      model_one_preds2 = predict(videos_model_clean), 
+      model_one_resids2 = resid(videos_model_clean)
+    ) %>% 
+    ggplot(aes(model_one_preds2, model_one_resids2)) + 
+    geom_point() + 
+    stat_smooth()
+
+grid.arrange(plot1, plot2)
 
 ```
 
-By the above *Residual vs. Estimators* graph, it's possible to note that a non-linear relationship in this data. That said, linear conditional expectation assumption is not met. Specially toward the right end of the data (around 7.5 and on), our model seem to shift pattern and start to produce different patterned residuals. 
-In order to go around this, one could try to breakdown the model in two sets, or maybe a different variable transformation, hoping to end up with a more linear pattern.
+By the above *Residual vs. Estimators* graphs, it's possible to note that a non-linear relationship to the data. That said, linear conditional expectation assumption is violated. Specially toward the right end of the data (around 7.5 and on), our model seem to shift pattern and start to produce different patterned residuals. In order to go around this, one could try to breakdown the model in two sets, as they appear to behave distinctively, or maybe a different variable transformation, hoping to end up with a more linear pattern.
+For the sake of this analysis, by excluding what appears to be outliers on the far right, and also removing videos without a rate (rate == 0), it is possible to achieve a much more reasonable curvature as shown on the lower graph, although not really linear. That said, it is important to say that some rows were excluded, it is still a big sample with 8068 observations.
 
 \newpage
 **1.4 Homoskedastic Error**
 
-```{r, out.width="50%", fig.cap="Homoskedastic Errors on Residuals vs Fitted", echo=FALSE, include=TRUE}
+```{r vla vla vla, out.width="70%", align = 'center', fig.cap="Homoskedastic Errors on Residuals vs Fitted", echo=FALSE, include=TRUE}
+par(mfrow = c(2, 2))
+
 plot(videos_model, which=3)
+plot(videos_model_clean, which=3)
+plot(videos_model, which=1)
+plot(videos_model_clean, which=1)
 ```
-To assess whether the distribution of the errors is homoskedastic, we can examine the residuals versus fitted plot again and also run a Breusch-Pagan Test. With a very strong p-value significance (p-value < 2.2e-16), the null hypothesis is rejected, leading us to believe that Heteroskedastic errors are present. By the plot above, it does look there is some in balance in the variance of the residuals specially after the before mention tipping point. Meaning that not only the linearity is compromised, but also pointing out to the presence of different variance patterns.
+To assess whether the distribution of the errors is homoskedastic, we can examine the residuals versus fitted plot again and also run a Breusch-Pagan Test. With a strong p-value significance (p-value < 2.2e-16 when using the whole dataset, and a little more modest p-value = 0.003997 when removing data that appears to be outliers and zero - as described in 1.3), the null hypothesis is rejected, leading us to believe that Heteroskedastic errors are present. By the plot above, it does look there is some in balance in the variance of the residuals specially after the before mention tipping point. Meaning that not only the linearity is compromised, but also pointing out to the presence of different variance patterns. Again, as mentioned in 1.3, the data on the far right of the set, seems to compose a group of outliers, or just differ from the rest of the set. Those are long videos (over 11 minutes), and when excluded, although still display a larger variance on errors on the mid and right portion of the graphs, the heteroskedasticity appears more mild.
 All that said, the assumption was not met. In order to correct this, there's the possibility to use a robust covariance matrix which in mild conditions could help with this issue.
 
-```{r}
+```{r blp1, include=FALSE}
 bptest(videos_model)
+
 ```
 
+```{r blp2, include=FALSE}
+bptest(videos_model_clean)
+```
