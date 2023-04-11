@@ -1,83 +1,50 @@
 ---
 title: "Unit 12 HW: The Classical Linear Model"
-output: 'pdf_document'  
-classoption: landscape
+output: 'pdf_document'
 ---
 
 ```{r setup, include=FALSE, warning=FALSE, message=FALSE}
 library(tidyverse)
 library(patchwork)
-library(car)
 library(lmtest)
 library(sandwich)
 library(stargazer)
 ```
 
-```{r chunk options}
+```{r chunk options, include=FALSE}
 knitr::opts_chunk$set(message=FALSE, dpi=300)
 ```
 
-
-```{r get robust ses }
+```{r get robust ses, include=FALSE}
 rse <- function(model) { 
   sqrt(diag(vcovHC(model)))
   }
 ```
 
-#Loading in the data
-
-```{r load-data, message=FALSE}
+```{r load-data, message=FALSE, include=FALSE}
 
 videos <- read_delim("videos.txt", delim = "\t")
-videosfilteredout <- videos %>% filter(!is.na(videos$views))
+videosfo <- videos %>% filter(!is.na(videos$views))
 
-glimpse(videosfilteredout)
-summary(videosfilteredout)
+glimpse(videosfo)
+summary(videosfo)
 ```
 
-
-#creating the model
-
-```{r}
-#model_one <- lm(mpg ~ disp + hp + wt + drat, data = mtcars)
-videos_model <-lm(log(views) ~ rate + length, data=videosfilteredout)
-
-videos_modelnotfitted <-lm(views ~ rate + length, data=videosfilteredout)
-
+```{r, include=FALSE}
+videos_model <-lm(log(views) ~ rate + length, data=videosfo)
+videos_model2 <-lm(views ~ rate + length, data=videosfo)
 
 ```
 
-- Q1.1 I.I.D. data
-
->To assess IID data, we need to understand the sampling process used to collect the data. From the videos.txt documentation, we learned that the videos were selected initially from the set of videos included in "Recently Featured", "Most Viewed", "Top Rated", and "Most Discussed" from "Today", "This Week", "This Month" and All Time" on February 22nd, 2007. This totalled 189 unique videos followed by a "crawl" and this process was followed for the remaining data collected through 2008. The data collected was by video ID and includes the variables uploader, age, category, length, views, rate, ratings, comments, and related IDs extracted from the YouTube API. There are several reasons why this data collection process might not result in IID data, below. Thus, the assumption of IID data is not met.
-
->- The primary focus of this data collection was on successful videos by collecting from the "Recently Featured", "Most Viewd", "Top Rated", and "Most Discussed" categories. This likely indicates that the data is not distributed as the population of all YouTube videos and is heavily weighted towards successful videos.
->- Clustering may also be a factor in this data given that videos in the top categories are likely related to one another. They could be videos uploaded by the same user or very similar content.
-
-
-- Q1.2 No Perfect Collinearity
-
-> To evaluate collinearity, we can look at our coefficients, and notice that R has not dropped any variables. 
-
-```{r}
-videos_model$coefficients
+```{r plot straight up, include=FALSE}
+plot(videos_model)
 ```
 
-> This tells us that there is no perfect collinearity between our variables. Perfect collinearity indicates that one data series can be exactly produced through a simple transformation from another. Intuitively, this also makes sense because you wouldn't expect the lenght of a video to be transformable to rate of a video and vice-versa.
+**1.3 - Linear conditional expectation**
 
->This assumption also includes the requirement that a BLP exists, which may not happen if there are heavy tails.  In this case, though, we don't see any distributions that look like they have unusually low or high values.
+```{r ggplot, out.width="50%", fig.cap="Linear Conditional Expectation on Precdicted vs Residuals", echo=FALSE, include=TRUE}
 
-1.3
-
-- Linear conditional expectation
-
-> To assess whether there is a linear conditional expectation, we've learned to look at the predicted vs. residuals of the model.
-
-```{r}
-
-#videos_model <-lm(log(views) ~ rate + length, data=videosfilteredout)
-
-videosfilteredout %>% 
+videosfo %>% 
   mutate(
     model_one_preds = predict(videos_model), 
     model_one_resids = resid(videos_model)
@@ -86,40 +53,21 @@ videosfilteredout %>%
   geom_point() + 
   stat_smooth()
 
-videosfilteredout %>% 
-  mutate(
-    model_one_preds = predict(videos_model), 
-    model_one_resids = resid(videos_model)
-  ) %>% 
-  ggplot(aes(model_one_preds, log(videosfilteredout$views))) + 
-  geom_point() + 
-  stat_smooth()
-
-```
-```{r}
-
-# library
-library(ggplot2)
-
-
-#videos_model <-lm(log(views) ~ rate + length, data=videosfilteredout)
- 
-
-
-ggplot(videosfilteredout, aes(x=videosfilteredout$rate, y=videosfilteredout$views)) + 
-    geom_point()
-
-ggplot(videosfilteredout, aes(x=videosfilteredout$length, y=videosfilteredout$views)) + 
-    geom_point()
-
-
 ```
 
-On the far out right side of the Residual vs. Estimators graph above, it's possible to note that a non-linear relationship in this data, and on the far right end of the data our model seem to be producing underestimated data. In order to correct this, one could try variable transformations, hoping to end up with a more linear pattern in this plot. We would say that the requirement was no met.
+By the above *Residual vs. Estimators* graph, it's possible to note that a non-linear relationship in this data. That said, linear conditional expectation assumption is not met. Specially toward the right end of the data (around 7.5 and on), our model seem to shift pattern and start to produce different patterned residuals. 
+In order to go around this, one could try to breakdown the model in two sets, or maybe a different variable transformation, hoping to end up with a more linear pattern.
 
-1.4 Homoskedastic Error
+\newpage
+**1.4 Homoskedastic Error**
 
-```{r}
+```{r, out.width="50%", fig.cap="Homoskedastic Errors on Residuals vs Fitted", echo=FALSE, include=TRUE}
 plot(videos_model, which=3)
 ```
-To assess whether the distribution of the errors is homoskedastic, we can examine the residuals versus fitted plot again.  By looking at the plot above, it does look like there might be some inbalance in the variance of the residuals at the upper side of the predicted values, but it is not severe, and could be explained by the rate being equal or more the zero. Over all it looks like the Homoskedastic Error could be assumed.
+To assess whether the distribution of the errors is homoskedastic, we can examine the residuals versus fitted plot again and also run a Breusch-Pagan Test. With a very strong p-value significance (p-value < 2.2e-16), the null hypothesis is rejected, leading us to believe that Heteroskedastic errors are present. By the plot above, it does look there is some in balance in the variance of the residuals specially after the before mention tipping point. Meaning that not only the linearity is compromised, but also pointing out to the presence of different variance patterns.
+All that said, the assumption was not met. In order to correct this, there's the possibility to use a robust covariance matrix which in mild conditions could help with this issue.
+
+```{r}
+bptest(videos_model)
+```
+
