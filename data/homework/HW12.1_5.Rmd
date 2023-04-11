@@ -1,0 +1,71 @@
+---
+title: 'Unit 12 HW: The Classical Linear Model, Question 1.5'
+author: "Abraham Yang"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r load packages, include=FALSE}
+library(tidyverse)
+library(patchwork)
+library(car)
+library(lmtest)
+library(sandwich)
+library(stargazer)
+library(gridExtra)
+library(lattice)
+library(dplyr)
+install.packages("dgof")
+library("dgof")
+install.packages('tseries')
+library(tseries)
+```
+
+```{r chunk options, include=FALSE}
+knitr::opts_chunk$set(message=FALSE, dpi=300)
+```
+
+```{r load-data, message=FALSE, include=FALSE}
+videos <- read_delim("videos.txt", delim = "\t")
+videosfo <- videos %>% filter(!is.na(videos$views))
+videosclean <- videosfo[videosfo$rate>=1,]
+videosclean <- videosclean[videosclean$length<=660,]
+glimpse(videosfo)
+summary(videosclean)
+```
+
+```{r, include=FALSE}
+videos_model <-lm(log(views) ~ rate + length, data=videosfo)
+videos_model_clean <-lm(log(views) ~ rate + length, data=videosclean)
+```
+
+```{r include=FALSE}}
+vids_resids = resid(videos_model_clean)
+
+```
+
+```{r out.width="70%", align = 'center', fig.cap="Residuals vs. Normality", echo=FALSE, include=TRUE}
+
+plot_one <- videosclean %>%
+  ggplot(aes(x = vids_resids)) +
+  geom_histogram()
+
+plot_two <- videosclean %>%
+  ggplot(aes(sample = vids_resids)) +
+  stat_qq() + stat_qq_line()
+
+plot_one / plot_two
+```
+The histogram of residuals and the qqplot show a normal distribution, albeit imperfect. 
+
+```{r Kolmogorov-Smirnov Test, include=TRUE}
+ks.test(vids_resids, "pnorm")
+```
+```{r Shapiro–Wilk Test, include=TRUE}}
+shapiro.test(sample(vids_resids, size = 5000, replace = TRUE))
+```
+
+```{r Jarque Bera Test, include=TRUE}
+jarque.bera.test(sample(vids_resids, size = 5000, replace = TRUE))
+```
+Looking at the p-values from the Kolmogorov-Smirnov test, Shapiro–Wilk test, and Jarque Bera test, all the p-values are less than 0.05, therefore we reject the null hypotheses that the residual distribution comes from a normal distribution. However, in large samples such as this dataset, CLT kicks in. And the more we add datapoints, the more the CLM tests will fail.
