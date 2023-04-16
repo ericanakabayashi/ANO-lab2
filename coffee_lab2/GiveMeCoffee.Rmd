@@ -1,0 +1,70 @@
+---
+title: "Estimating Coffee Ratings - Dataset from Coffee Quality Institute"
+author: "Abraham Yang, Erica Nakabayashi, Melissa Oliveira"
+date: '2023-03-30'
+output: pdf_document
+header-includes:
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages and set options, include=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(stargazer)
+library(sandwich)
+library(lmtest)
+
+theme_set(theme_bw())
+
+```
+
+```{r load data, message = FALSE, include=FALSE}
+
+original_coffee <- read.csv("merged_data_cleaned.csv")
+
+```
+
+```{r data summary}
+
+summary(original_coffee)
+
+```
+
+```{r oh no duplicates}
+metad_coffee <- original_coffee[original_coffee$Owner=="metad plc" & original_coffee$Farm.Name=="metad plc",]
+head(metad_coffee)
+```
+
+```{r filtering out mash up}
+coffee<-unique(original_coffee[,c("Species", "Owner", "Owner.1", "Farm.Name", "Producer", "Harvest.Year", "Expiration")])
+```
+
+
+```{r data glimpse}
+nrow(coffee)
+```
+original_coffee[,c("Lot.Number", "ICO.Number", "Country.of.Origin","Category.One.Defects","Category.Two.Defects","Total.Cup.Points","altitude_low_meters")]
+
+```{r variable add columns}
+sum(original_coffee=="")
+```
+
+```{r data head}
+which(original_coffee=="", arr.ind=TRUE)
+```
+
+
+Since there's is more than a few duplicate values, we will be assuming average rates for the values that have more than one entry. That might happen because, CQI has 3 different trained evaluators test out the coffee according to their evaluation process documentation (<https://database.coffeeinstitute.org/api/s3proxy/get/coffee/files/f05qp1bqg3/Process%20for%20Evaluating%20Coffees%20in%20the%20Q%20Coffee%20System%20March%202022.pdf>).
+
+```{r tbc}
+
+
+
+```
