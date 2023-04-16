@@ -195,19 +195,84 @@ avg_alt <- read.csv("averagealtitude.csv")
 ```
 
 ```{r load data}
+colnames(avg_alt)[1] <- "country"
+
 head(avg_alt)
 ```
 
 ```{r load data}
+avg_alt[nrow(avg_alt)+1,] = avg_alt[nrow(avg_alt),]
+avg_alt[nrow(avg_alt),1] = "Ivory Coast"
+avg_alt[nrow(avg_alt),2] = 250
 
-# dataframe
-data = data.frame(avg_alt$Country.Elevation.https...en.wikipedia.org.wiki.List_of_countries_by_average_elevation,
-                  df$country)
-  
-data$results = ifelse(data$column1 > data$column2, 'Column1',
-                      ifelse(data$column1 < data$column2, 'Column2', 'None'))
-  
-  
-# display
-data
+coffee_tropical_avgalt_merged = merge(x = coffee_tropical_merged, y = avg_alt, by = "country")
+glimpse(coffee_tropical_avgalt_merged)
+
 ```
+
+```{r load data}
+coffee_tropical_avgalt_merged$altitude <- ifelse(coffee_tropical_avgalt_merged$altitude_low_meters/coffee_tropical_avgalt_merged$Elevation < 0.6, coffee_tropical_avgalt_merged$Elevation, coffee_tropical_avgalt_merged$altitude_low_meters)
+head(coffee_tropical_avgalt_merged,10)
+```
+
+```{r load data}
+df<-coffee_tropical_avgalt_merged[,c("country","Category.One.Defects","Category.Two.Defects","Total.Cup.Points","altitude","Tropical","subregion")]
+```
+
+
+
+```{r model 1}
+which(df$altitude == 190164)
+```
+
+```{r model 1}
+df[383,5] = 1901.64
+df[405,5] = 1901.64
+```
+
+```{r model 1}
+which(df$altitude == 110000.00)
+```
+
+```{r model 1}
+df[906,5] = 1100
+```
+
+```{r model 1}
+which(df$altitude == 11000.00)
+```
+
+```{r model 1}
+df[22,5] = 1100
+```
+
+```{r model 1}
+df<-df %>%  filter(Total.Cup.Points > 0)
+```
+
+
+
+```{r load data}
+library(gganimate)
+ggplot(df, aes(x = altitude, 
+                 y = Total.Cup.Points)) + 
+  geom_point( alpha = 0.8, size = 1) +
+  geom_smooth(method = "lm", se = F) +
+  ylab("Coffee rating") +
+  xlab("Coffee growing altitude (meters)") +
+  labs(title = 'Relationship between altitude and coffee ratings',
+    subtitle = '{closest_state}')
+```
+
+```{r model}
+v1<-lm(df$Total.Cup.Points ~ df$altitude)
+plot(v1)
+summary(v1)
+```
+
+```{r model}
+v2<-lm(df$Total.Cup.Points ~ ln(df$altitude)
+plot(v2)
+summary(v2)
+```
+
