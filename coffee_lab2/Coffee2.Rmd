@@ -1,0 +1,213 @@
+---
+title: "Estimating Coffee Ratings - Dataset from Coffee Quality Institute"
+author: "Abraham Yang, Erica Nakabayashi, Melissa Oliveira"
+date: '2023-03-30'
+output: pdf_document
+header-includes:
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages and set options, include=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(stargazer)
+library(sandwich)
+library(lmtest)
+
+theme_set(theme_bw())
+
+```
+
+```{r load data, message = FALSE, include=FALSE}
+original_coffee <- read.csv("merged_data_cleaned.csv")
+```
+
+```{r data summary}
+summary(original_coffee)
+```
+
+```{r late nit bug}
+coffee_df<-original_coffee[,c("Species", "Owner", "Owner.1", "Farm.Name", "Producer", "Harvest.Year", "Expiration", "Country.of.Origin", "Region","Category.One.Defects","Category.Two.Defects","Total.Cup.Points","altitude_low_meters")]
+```
+
+```{r late nit bug}
+glimpse(coffee_df)
+```
+
+```{r data head}
+coffee_df <- coffee_df %>% drop_na(altitude_low_meters)
+```
+
+```{r data head}
+glimpse(coffee_df)
+```
+
+```{r LOOKING GOOD}
+sum(is.na(coffee_df$altitude_low_meters))
+sum(coffee_df$altitude_low_meters=="")
+```
+```{r data head}
+d<-unique(coffee_df[,c("Country.of.Origin", "Region")])
+dd <- d[order(d$Country.of.Origin, d$Region),]
+head(dd,400)
+```
+```{r load data, message = FALSE, include=FALSE}
+tropicalcountries <- read.csv("data_tropical.csv")
+```
+
+```{r load data}
+head(tropicalcountries)
+```
+
+
+```{r load data}
+nrow(tropicalcountries)
+```
+
+```{r load data, message = FALSE}
+tropicalcountries<- tropicalcountries %>% 
+  mutate(Tropical = if_else(fullyTropical =="true" ,
+                                   "FullyTropical",
+                                   "PartiallyTropical"))
+```
+
+```{r load data}
+tropicalcountries[nrow(tropicalcountries)+1,] = tropicalcountries[nrow(tropicalcountries),]
+tropicalcountries[nrow(tropicalcountries),5] = "Japan"
+tropicalcountries[nrow(tropicalcountries),17] = "NotTropical"
+tropicalcountries[nrow(tropicalcountries),9] = "Asia"
+tropicalcountries[nrow(tropicalcountries),10] = "Eastern Asia"
+
+```
+
+```{r load data}
+head(tropicalcountries,150)
+```
+
+```{r}
+colnames(coffee_df)[8] <- "country"
+```
+
+```{r}
+glimpse(coffee_df)
+```
+
+
+```{r}
+coffee_df$country[coffee_df$country == "Tanzania, United Republic Of"] <- "Tanzania"
+```
+
+```{r}
+sum(coffee_df$country == "Tanzania, United Republic Of")
+```
+```{r}
+sum(coffee_df$country == "Tanzania")
+```
+
+
+```{r}
+coffee_df$country[coffee_df$country == "United States (Hawaii)"] <- "United States"
+```
+
+```{r}
+coffee_df$country[coffee_df$country == "United States (Puerto Rico)"] <- "United States"
+```
+
+```{r}
+coffee_df$country[coffee_df$country == "Cote d?Ivoire"] <- "Ivory Coast"
+```
+
+```{r}
+coffee_tropical_merged = merge(x = coffee_df, y = tropicalcountries, by = "country")
+```
+
+```{r}
+head(coffee_tropical_merged)
+```
+
+```{r}
+glimpse(coffee_tropical_merged)
+```
+
+```{r}
+nrow(coffee_tropical_merged)
+```
+
+```{r}
+df<-coffee_tropical_merged[,c("country","Category.One.Defects","Category.Two.Defects","Total.Cup.Points","altitude_low_meters","Tropical","subregion")]
+```
+
+```{r}
+head(df,1000)
+```
+```{r model 2}
+v1<-lm(df$Total.Cup.Points ~ df$country)
+plot(v1)
+summary(v1)
+```
+
+```{r model 1}
+v2<-lm(df$Total.Cup.Points ~ df$altitude_low_meters)
+plot(v2)
+summary(v2)
+```
+
+```{r model 1}
+v3<-lm(df$Total.Cup.Points ~ df$altitude_low_meters + df$Tropical)
+plot(v3)
+summary(v3)
+```
+
+```{r model 1}
+v3<-lm(df$Total.Cup.Points ~ df$altitude_low_meters + df$Tropical + df$subregion)
+plot(v3)
+summary(v3)
+```
+
+```{r model 1}
+min(df$altitude_low_meters)
+```
+
+```{r model 1}
+max(df$altitude_low_meters)
+```
+
+which (df$col-name == val)
+tropicalcountries[nrow(tropicalcountries)+1,] = tropicalcountries[nrow(tropicalcountries),]
+
+```{r model 1}
+which(df$altitude_low_meters == 190164)
+```
+
+```{r model 1}
+df[385,5] == 1901.64
+df[406,5] == 1901.64
+```
+```{r load data}
+avg_alt <- read.csv("averagealtitude.csv")
+```
+
+```{r load data}
+head(avg_alt)
+```
+
+```{r load data}
+
+# dataframe
+data = data.frame(avg_alt$Country.Elevation.https...en.wikipedia.org.wiki.List_of_countries_by_average_elevation,
+                  df$country)
+  
+data$results = ifelse(data$column1 > data$column2, 'Column1',
+                      ifelse(data$column1 < data$column2, 'Column2', 'None'))
+  
+  
+# display
+data
+```
