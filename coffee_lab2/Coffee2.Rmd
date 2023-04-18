@@ -253,7 +253,6 @@ df<-df %>%  filter(Total.Cup.Points > 0)
 
 
 ```{r load data}
-library(gganimate)
 ggplot(df, aes(x = altitude, 
                  y = Total.Cup.Points)) + 
   geom_point( alpha = 0.8, size = 1) +
@@ -271,8 +270,56 @@ summary(v1)
 ```
 
 ```{r model}
-v2<-lm(df$Total.Cup.Points ~ ln(df$altitude)
+v2<-lm(df$Total.Cup.Points ~ log(df$altitude))
 plot(v2)
 summary(v2)
+```
+
+```{r model}
+v3<-lm(df$Total.Cup.Points ~ log(df$altitude) + df$country)
+plot(v3)
+summary(v3)
+```
+
+```{r model}
+v4<-lm(df$Total.Cup.Points ~ df$subregion + df$Tropical + log(df$altitude))
+plot(v4)
+summary(v4)
+```
+
+```{r model}
+sample <- sample(c(TRUE, FALSE), nrow(df), replace=TRUE, prob=c(0.3,0.7))
+train  <- df[sample, ]
+test   <- df[!sample, ]
+
+glimpse(train)
+glimpse(test)
+```
+```{r model}
+v1<-lm(train$Total.Cup.Points ~ train$altitude)
+plot(v1)
+summary(v1)
+```
+
+```{r model}
+v2<-lm(train$Total.Cup.Points ~ train$altitude + train$subregion)
+plot(v2)
+summary(v2)
+```
+
+```{r model}
+v3<-lm(train$Total.Cup.Points ~ train$altitude + train$country +train$Tropical)
+plot(v3)
+summary(v3)
+```
+```{r model}
+v5<-lm(train$Total.Cup.Points ~  train$Tropical + train$subregion)
+plot(v5)
+summary(v5)
+```
+```{r model}
+v4<-lm(train$Total.Cup.Points ~ train$Tropical + train$subregion)
+plot(v4)
+summary(v4)
 ```
 
