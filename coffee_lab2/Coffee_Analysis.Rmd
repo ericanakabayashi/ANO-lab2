@@ -20,6 +20,10 @@ library(magrittr)
 library(stargazer)
 library(sandwich)
 library(lmtest)
+library(patchwork)
+library(car)
+library(gridExtra)
+library(caret)
 
 theme_set(theme_bw())
 
@@ -108,6 +112,17 @@ ggplot(df, aes(x = altitude_low_meters,
   labs(title = 'Relationship between altitude and coffee ratings',
     subtitle = '{closest_state}')
 ```
+
+```{r correlation in between X and Y?}
+ggplot(df, aes(x = log(altitude_low_meters), 
+                 y = Total.Cup.Points)) + 
+  geom_point( alpha = 0.8, size = 1) +
+  geom_smooth(method = "lm", se = F) +
+  ylab("Coffee rating") +
+  xlab("Coffee growing altitude (meters)") +
+  labs(title = 'Relationship between altitude and coffee ratings',
+    subtitle = '{closest_state}')
+```
 Taking a look at the number of observations by country, only the 10 have more than 30 samples per country. Which could lead to issues on Large Sample assumptions, and also overfitting of the model. 
 
 ```{r modificacao2}
@@ -147,36 +162,190 @@ df_ %>%
 
 ```
 
-```{r exclude oceania}
-df <- subset(df, subregion != "Oceania") #clean invalid score
+```{r exclude subregions}
+df <- subset(df, subregion != "Caribbean") #clean invalid score
+df <- subset(df, subregion != "Western Africa, Sub-Saharan Africa") #clean invalid score
+df <- subset(df, subregion != "Melanesia") #clean invalid score
+df <- subset(df, subregion != "Northern America") #clean invalid score
+df <- subset(df, subregion != "Southern Asia, South Central Asia") #clean invalid score
+
 df %>% count(subregion, sort = TRUE)
 ```
 
 ```{r divide into train and test}
-sample <- sample(c(TRUE, FALSE), nrow(df), replace=TRUE, prob=c(0.3,0.7))
-train  <- df[sample, ]
-test   <- df[!sample, ]
+library(splitstackshape)
 
-glimpse(train)
-glimpse(test)
-```
-```{r model1}
-v1<-lm(train$Total.Cup.Points ~ train$altitude_low_meters)
-plot(v1)
-summary(v1)
+set.seed(19108379) 
+df$rowId <- 1:nrow(df)
+train <- stratified(df,"subregion",size =0.3)
+test <- df[!(df$rowId %in% train$rowId),]
+
 ```
 
-```{r model2}
-v2<-lm(train$Total.Cup.Points ~ train$altitude + train$Tropical)
-plot(v2)
-summary(v2)
+```{r load robust standard error puller} 
+rse <- function(model) { 
+  sqrt(diag(vcovHC(model)))
+}
 ```
 
-```{r model3}
-v3<-lm(train$Total.Cup.Points ~ train$altitude + train$subregion + train$Tropical + train$subregion*train$Tropical )
-plot(v3)
-summary(v3)
+
+```{r estimate models}
+v1<-lm(Total.Cup.Points ~ altitude_low_meters, data = train)
+v2<-lm(Total.Cup.Points ~ log(altitude_low_meters), data = train)
+
+v3<-lm(Total.Cup.Points ~ altitude_low_meters + subregion, data=train) #adding Variables
+v4<-lm(Total.Cup.Points ~ altitude_low_meters + Tropical, data=train) #adding Variables
+
+v5<-lm(Total.Cup.Points ~ altitude_low_meters + subregion + Tropical, data=train) #adding Variables
+
+v6<-lm(Total.Cup.Points ~ altitude_low_meters + subregion + Tropical + subregion*Tropical, data=train) #adding interaction term
+
+v7<-lm(Total.Cup.Points ~ altitude_low_meters + subregion + Tropical + subregion * Tropical - `subregion Eastern Asia:TropicalNotTropical`, data = train)
 ```
-```{r stargazer_}
-stargazer(v1, v2, v3)
+
+
+```{r c, out.width="50%", align = 'center', fig.cap="Residuals, Normality and Linearity on Transformation or Not", echo=FALSE, include=TRUE}
+
+test <- test %>%
+  mutate(yhats = predict(v1,newdata = test))
+
+test <- test %>%
+  mutate(resids = Total.Cup.Points-yhats)
+
+test <- test %>%
+  mutate(yhats2 = predict(v2,newdata = test))
+
+test <- test %>%
+  mutate(resids2 = Total.Cup.Points-yhats2)
+
+
+hist_v1_resids <- test %>%
+  ggplot(aes(x = resids)) +
+  geom_histogram()
+
+scatter_v1_resids <- test %>%
+  ggplot(aes(yhats, resids)) +
+  geom_point() + 
+  stat_smooth()
+
+hist_v2_resids <- test %>%
+  ggplot(aes(x = resids2)) +
+  geom_histogram()
+
+scatter_v2_resids <- test %>%
+  ggplot(aes(yhats2, resids2)) +
+  geom_point() + 
+  stat_smooth()
+
+grid.arrange(hist_v1_resids, hist_v2_resids, scatter_v1_resids, scatter_v2_resids)
+
+
+```
+
+
+
+```{r Shapiro–Wilk Test for model 1 and 2, include=TRUE}
+shapiro.test(test$resids)
+```
+
+```{r Shapiro–Wilk Test for model 1 and 2, include=TRUE}
+shapiro.test(test$resids6)
+```
+```{r model 6, include=TRUE}
+plot(v6)
+summary(v6)
+```
+
+```{r model 6, include=TRUE}
+vif(v6)
+alias(v6)
+plot(lm(formula = Total.Cup.Points ~ altitude_low_meters + subregion + 
+    Tropical + subregion * Tropical, data = test))
+vif(v5)
+
+```
+
+```{r ...}
+
+test <- test %>%
+  mutate(yhats3 = predict(v3,newdata = test))
+
+test <- test %>%
+  mutate(resids3 = Total.Cup.Points-yhats3)
+
+test <- test %>%
+  mutate(yhats4 = predict(v4,newdata = test))
+
+test <- test %>%
+  mutate(resids4 = Total.Cup.Points-yhats4)
+
+test <- test %>%
+  mutate(yhats5 = predict(v5,newdata = test))
+
+test <- test %>%
+  mutate(resids5 = Total.Cup.Points-yhats5)
+
+test <- test %>%
+  mutate(yhats6 = predict(v6,newdata = test))
+
+test <- test %>%
+  mutate(resids6 = Total.Cup.Points-yhats6)
+
+hist_v3_resids <- test %>%
+  ggplot(aes(x = resids3)) +
+  geom_histogram()
+
+scatter_v3_resids <- test %>%
+  ggplot(aes(yhats, resids3)) +
+  geom_point() + 
+  stat_smooth()
+
+hist_v4_resids <- test %>%
+  ggplot(aes(x = resids4)) +
+  geom_histogram()
+
+scatter_v4_resids <- test %>%
+  ggplot(aes(yhats, resids4)) +
+  geom_point() + 
+  stat_smooth()
+
+hist_v5_resids <- test %>%
+  ggplot(aes(x = resids5)) +
+  geom_histogram()
+
+scatter_v5_resids <- test %>%
+  ggplot(aes(yhats, resids5)) +
+  geom_point() + 
+  stat_smooth()
+
+
+hist_v6_resids <- test %>%
+  ggplot(aes(x = resids6)) +
+  geom_histogram()
+
+scatter_v6_resids <- test %>%
+  ggplot(aes(yhats, resids6)) +
+  geom_point() + 
+  stat_smooth()
+
+
+grid.arrange(hist_v3_resids, scatter_v3_resids)
+grid.arrange(hist_v4_resids, scatter_v4_resids)
+grid.arrange(hist_v5_resids, scatter_v5_resids)
+grid.arrange(hist_v6_resids, scatter_v6_resids)
+
+```
+
+
+```{r ...}
+test_predictions <- predict(v6, newdata = test)
+threshold <- 85 # adjust the threshold as needed
+binary_predictions <- ifelse(test_predictions > threshold, 1, 0)
+
+binary_actual <- ifelse(test$Total.Cup.Points > threshold, 1, 0)
+binary_predictions_factor <- factor(binary_predictions, levels = c(0, 1))
+binary_actual_factor <- factor(binary_actual, levels = c(0, 1))
+confusion_matrix <- confusionMatrix(binary_predictions_factor, binary_actual_factor)
+print(confusion_matrix)
+
 ```
