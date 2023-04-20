@@ -1,0 +1,182 @@
+---
+title: "Estimating Coffee Ratings - Dataset from Coffee Quality Institute"
+author: "Abraham Yang, Erica Nakabayashi, Melissa Oliveira"
+date: '2023-04-20'
+output: pdf_document
+header-includes:
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages and set options, include=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(stargazer)
+library(sandwich)
+library(lmtest)
+
+theme_set(theme_bw())
+
+```
+
+```{r load DBs and filtering, message = FALSE, include=FALSE}
+#Upload main dataset
+merged_data_cleaned <- read.csv("merged_data_cleaned.csv")
+coffee_df<-merged_data_cleaned
+
+#Fixing country names for equivalency 
+colnames(coffee_df)[4] <- "country"
+coffee_df$country[coffee_df$country == "Tanzania, United Republic Of"] <- "Tanzania"
+coffee_df$country[coffee_df$country == "United States (Hawaii)"] <- "United States"
+coffee_df$country[coffee_df$country == "United States (Puerto Rico)"] <- "United States"
+coffee_df$country[coffee_df$country == "Cote d?Ivoire"] <- "Ivory Coast"
+
+#Import Tropical Dataset - https://worldpopulationreview.com/country-rankings/tropical-countries
+tropicalcountries <- read.csv("data_tropical.csv")
+tropicalcountries<- tropicalcountries %>% 
+  mutate(Tropical = if_else(fullyTropical =="true" ,
+                                   "FullyTropical",
+                                   "PartiallyTropical"))
+#add Japan - not tropical
+tropicalcountries[nrow(tropicalcountries)+1,] = tropicalcountries[nrow(tropicalcountries),]
+tropicalcountries[nrow(tropicalcountries),5] = "Japan"
+tropicalcountries[nrow(tropicalcountries),17] = "NotTropical"
+tropicalcountries[nrow(tropicalcountries),9] = "Asia"
+tropicalcountries[nrow(tropicalcountries),10] = "Eastern Asia"
+
+#First merge
+coffee_tropical_merged = merge(x = coffee_df, y = tropicalcountries, by = "country")
+
+
+#Import Average Altitude Dataset - From Wikipedia
+avg_alt <- read.csv("averagealtitude.csv")
+colnames(avg_alt)[1] <- "country"
+avg_alt[nrow(avg_alt)+1,] = avg_alt[nrow(avg_alt),]
+avg_alt[nrow(avg_alt),1] = "Ivory Coast"
+avg_alt[nrow(avg_alt),2] = 250
+
+
+#Second merge
+coffee_tropical_avgalt_merged = merge(x = coffee_tropical_merged, y = avg_alt, by = "country")
+
+```
+
+
+```{r histograms_, out.width="70%", align = 'center', fig.cap="distribution", echo=FALSE, include=TRUE}
+par(mfrow = c(2, 1))
+
+hist(coffee_tropical_avgalt_merged$Total.Cup.Points, which=3,ylab=NULL,main=NULL)
+hist(coffee_tropical_avgalt_merged$altitude_low_meters, which=3,ylab=NULL,main=NULL)
+
+```
+
+###Cleaning the data
+A few observations were above Everest altitude, and were excluded.
+We also gathered data from average altitude around the world and whatever fell behind 20% of average countries altitude were also excluded.
+
+```{r glimpse excluding variables that look weird on dataset, include=FALSE}
+df <- subset(coffee_tropical_avgalt_merged,Total.Cup.Points > 0) #clean invalid score
+df <- subset(df, altitude_low_meters < 8848) #clean altitude upperbound
+df <- subset(df, altitude_low_meters/Elevation > 0.2) #clean altitude lowerbound
+```
+
+```{r dataset glimpse}
+df <- df[,c("country", "Species", "Producer", "Harvest.Year", "Expiration", "Category.One.Defects", "Category.Two.Defects", "Total.Cup.Points", "altitude_low_meters", "Variety", "Species", "region", "Tropical")]
+
+glimpse(df)
+```
+```{r histograms_2, out.width="70%", align = 'center', fig.cap="Homoskedastic Errors on Residuals vs Fitted", echo=FALSE, include=TRUE}
+
+hist(df$Total.Cup.Points, which=3,ylab=NULL,main=NULL)
+hist(df$altitude_low_meters, which=3,ylab=NULL,main=NULL)
+
+```
+
+```{r correlation in between X and Y?}
+ggplot(df, aes(x = altitude_low_meters, 
+                 y = Total.Cup.Points)) + 
+  geom_point( alpha = 0.8, size = 1) +
+  geom_smooth(method = "lm", se = F) +
+  ylab("Coffee rating") +
+  xlab("Coffee growing altitude (meters)") +
+  labs(title = 'Relationship between altitude and coffee ratings',
+    subtitle = '{closest_state}')
+```
+Taking a look at the number of observations by country, only the 10 have more than 30 samples per country. Which could lead to issues on Large Sample assumptions, and also overfitting of the model. 
+
+```{r modificacao2}
+df2 <- df %>% count(country, sort = TRUE)
+head(df2,33)
+
+df3 <- df2 %>% filter(n<30)
+head(df3,33)
+
+df_ <- df %>% 
+  filter(!is.na(country),
+         Total.Cup.Points > 10) %>% 
+  mutate(country = fct_lump(country, 10), sort = TRUE)
+
+df_ %>% 
+  mutate(country = fct_reorder(country, Total.Cup.Points)) %>% 
+  ggplot(aes(Total.Cup.Points, country)) +
+  geom_boxplot()
+
+```
+
+In order to address that, we decided to group by geographical subRegion. That way, the most troublesome category presented is Oceania. Which we decided to leave out for the sake of this analysis.
+
+```{r modificacao3}
+df2 <- df %>% count(region, sort = TRUE)
+head(df2,33)
+
+df_ <- df %>% 
+  filter(!is.na(region),
+         Total.Cup.Points > 10) %>% 
+  mutate(region = fct_lump(region, 10), sort = TRUE)
+
+df_ %>% 
+  mutate(region = fct_reorder(region, Total.Cup.Points)) %>% 
+  ggplot(aes(Total.Cup.Points, region)) +
+  geom_boxplot()
+
+```
+
+```{r exclude oceania}
+df <- subset(df, region != "Oceania") #clean invalid score
+df %>% count(region, sort = TRUE)
+```
+
+```{r divide into train and test}
+sample <- sample(c(TRUE, FALSE), nrow(df), replace=TRUE, prob=c(0.3,0.7))
+train  <- df[sample, ]
+test   <- df[!sample, ]
+
+glimpse(train)
+glimpse(test)
+```
+```{r model1}
+v1<-lm(train$Total.Cup.Points ~ train$altitude_low_meters)
+plot(v1)
+summary(v1)
+```
+
+```{r model2}
+v2<-lm(train$Total.Cup.Points ~ train$altitude + train$Tropical)
+plot(v2)
+summary(v2)
+```
+
+```{r model3}
+v3<-lm(train$Total.Cup.Points ~ train$altitude + train$region + train$Tropical + train$region*train$Tropical )
+plot(v3)
+summary(v3)
+```
+```{r stargazer_}
+stargazer(v1, v2, v3)
+```
