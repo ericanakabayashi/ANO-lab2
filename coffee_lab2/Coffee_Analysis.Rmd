@@ -87,7 +87,7 @@ df <- subset(df, altitude_low_meters/Elevation > 0.2) #clean altitude lowerbound
 ```
 
 ```{r dataset glimpse}
-df <- df[,c("country", "Species", "Producer", "Harvest.Year", "Expiration", "Category.One.Defects", "Category.Two.Defects", "Total.Cup.Points", "altitude_low_meters", "Variety", "Species", "region", "Tropical")]
+df <- df[,c("country", "Species", "Producer", "Harvest.Year", "Expiration", "Category.One.Defects", "Category.Two.Defects", "Total.Cup.Points", "altitude_low_meters", "Variety", "Species", "subregion", "Tropical")]
 
 glimpse(df)
 ```
@@ -132,24 +132,24 @@ df_ %>%
 In order to address that, we decided to group by geographical subRegion. That way, the most troublesome category presented is Oceania. Which we decided to leave out for the sake of this analysis.
 
 ```{r modificacao3}
-df2 <- df %>% count(region, sort = TRUE)
+df2 <- df %>% count(subregion, sort = TRUE)
 head(df2,33)
 
 df_ <- df %>% 
-  filter(!is.na(region),
+  filter(!is.na(subregion),
          Total.Cup.Points > 10) %>% 
-  mutate(region = fct_lump(region, 10), sort = TRUE)
+  mutate(region = fct_lump(subregion, 10), sort = TRUE)
 
 df_ %>% 
-  mutate(region = fct_reorder(region, Total.Cup.Points)) %>% 
-  ggplot(aes(Total.Cup.Points, region)) +
+  mutate(region = fct_reorder(subregion, Total.Cup.Points)) %>% 
+  ggplot(aes(Total.Cup.Points, subregion)) +
   geom_boxplot()
 
 ```
 
 ```{r exclude oceania}
-df <- subset(df, region != "Oceania") #clean invalid score
-df %>% count(region, sort = TRUE)
+df <- subset(df, subregion != "Oceania") #clean invalid score
+df %>% count(subregion, sort = TRUE)
 ```
 
 ```{r divide into train and test}
@@ -173,7 +173,7 @@ summary(v2)
 ```
 
 ```{r model3}
-v3<-lm(train$Total.Cup.Points ~ train$altitude + train$region + train$Tropical + train$region*train$Tropical )
+v3<-lm(train$Total.Cup.Points ~ train$altitude + train$subregion + train$Tropical + train$subregion*train$Tropical )
 plot(v3)
 summary(v3)
 ```
