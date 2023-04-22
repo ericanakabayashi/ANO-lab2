@@ -1,0 +1,152 @@
+---
+title: "Estimating Coffee Ratings - Dataset from Coffee Quality Institute"
+author: "Abraham Yang, Erica Nakabayashi, Melissa Olivera"
+date: '2023-04-21'
+output: pdf_document
+header-includes:
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages and set options, include=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(stargazer)
+library(sandwich)
+library(lmtest)
+library(patchwork)
+library(car)
+library(gridExtra)
+library(caret)
+
+theme_set(theme_bw())
+
+```
+
+```{r load DBs and filtering, message = FALSE, include=FALSE}
+#Upload main dataset
+merged_data_cleaned <- read.csv("merged_data_cleaned.csv")
+coffee_df<-merged_data_cleaned
+
+#Fixing country names for equivalency 
+colnames(coffee_df)[4] <- "country"
+coffee_df$country[coffee_df$country == "Tanzania, United Republic Of"] <- "Tanzania"
+coffee_df$country[coffee_df$country == "United States (Hawaii)"] <- "United States"
+coffee_df$country[coffee_df$country == "United States (Puerto Rico)"] <- "United States"
+coffee_df$country[coffee_df$country == "Cote d?Ivoire"] <- "Ivory Coast"
+
+#Import Tropical Dataset - https://worldpopulationreview.com/country-rankings/tropical-countries
+tropicalcountries <- read.csv("data_tropical.csv")
+tropicalcountries<- tropicalcountries %>% 
+  mutate(Tropical = if_else(fullyTropical =="true" ,
+                                   "FullyTropical",
+                                   "PartiallyTropical"))
+#add Japan - not tropical
+tropicalcountries[nrow(tropicalcountries)+1,] = tropicalcountries[nrow(tropicalcountries),]
+tropicalcountries[nrow(tropicalcountries),5] = "Japan"
+tropicalcountries[nrow(tropicalcountries),17] = "NotTropical"
+tropicalcountries[nrow(tropicalcountries),9] = "Asia"
+tropicalcountries[nrow(tropicalcountries),10] = "Eastern Asia"
+
+#First merge
+coffee_tropical_merged = merge(x = coffee_df, y = tropicalcountries, by = "country")
+
+
+#Import Average Altitude Dataset - From Wikipedia
+avg_alt <- read.csv("averagealtitude.csv")
+colnames(avg_alt)[1] <- "country"
+avg_alt[nrow(avg_alt)+1,] = avg_alt[nrow(avg_alt),]
+avg_alt[nrow(avg_alt),1] = "Ivory Coast"
+avg_alt[nrow(avg_alt),2] = 250
+
+
+#Second merge
+coffee_tropical_avgalt_merged = merge(x = coffee_tropical_merged, y = avg_alt, by = "country")
+
+```
+
+
+```{r glimpse excluding variables that look weird on dataset, include=FALSE}
+df <- subset(coffee_tropical_avgalt_merged,Total.Cup.Points > 0) #clean invalid score
+df <- subset(df, altitude_low_meters < 8848) #clean altitude upperbound
+df <- subset(df, altitude_low_meters/Elevation > 0.2) #clean altitude lowerbound
+```
+
+```{r dataset glimpse, include=FALSE}
+df <- df[,c("country", "Species", "Producer", "Harvest.Year", "Expiration", "Category.One.Defects", "Category.Two.Defects", "Total.Cup.Points", "altitude_low_meters", "Variety", "Species", "subregion", "Tropical")]
+
+glimpse(df)
+```
+
+
+
+```{r histograms_2, out.width="70%", align = 'center', fig.cap="Homoskedastic Errors on Residuals vs Fitted", echo=FALSE, include=FALSE}
+
+hist(df$Total.Cup.Points, which=3,ylab=NULL,main=NULL)
+hist(df$altitude_low_meters, which=3,ylab=NULL,main=NULL)
+```
+
+
+```{r divide into train and test, include=FALSE}
+library(splitstackshape)
+
+set.seed(19108379) 
+df$rowId <- 1:nrow(df)
+train <- stratified(df,"subregion",size =0.3)
+test <- df[!(df$rowId %in% train$rowId),]
+
+```
+
+```{r load robust standard error puller, include=FALSE} 
+rse <- function(model) { 
+  sqrt(diag(vcovHC(model)))
+}
+```
+
+
+```{r estimate models, include=FALSE}
+v1<-lm(Total.Cup.Points ~ altitude_low_meters, data = train)
+v2<-lm(Total.Cup.Points ~ log(altitude_low_meters), data = train)
+v3<-lm(Total.Cup.Points ~ altitude_low_meters + subregion, data=train) #adding Variables
+#v4<-lm(Total.Cup.Points ~ altitude_low_meters + Tropical, data=train) #adding Variables
+
+#v5<-lm(Total.Cup.Points ~ altitude_low_meters + subregion + Tropical, data=train) #adding Variables
+
+#v6<-lm(Total.Cup.Points ~ altitude_low_meters + subregion + Tropical + subregion*Tropical, data=train) #adding interaction term
+
+#v7<-lm(Total.Cup.Points ~ altitude_low_meters + subregion + Tropical + subregion * Tropical - `subregion Eastern Asia:TropicalNotTropical`, data = train)
+```
+```{r,include=FALSE}
+v1$coefficients
+v2$coefficients
+v3$coefficients
+#v4$coefficients
+#v5$coefficients
+#v6$coefficients
+#v7$coefficients
+```
+
+
+# Limitations
+To assess our model limitations, we considered both statistical and structural limitations. For the statistical limitations there are 2 large-sample statistical assumptions we evaluated. We first evaluated whether the data was IID. We concluded that this assumption was not met given that the data collected primarily focused on top coffees. >85% of the reviews had a total cup score >80 pts. We believe this is not a true representation of the population and geographical clustering is also a factor.  
+
+The second statistical assumption we evaluated was unique BLP/no perfect collinearity. For this assumption, we evaluated the coefficients of each of our models and noticed that R did not drop any of our variables, indicating no perfect collinearity. This assumption also includes the requirement that a unique BLP exists, however our distributions had heavy tails so this assumption was not met.
+
+For structural limitations, we identified Omitted Variable bias and Right Hand Side bias.
+For omitted variable bias, there were several variables we omitted that may bias our results such as moisture and variety due to too many missing values. These variables are positively correlated to total cup points, so we would expect a bias moving away from zero and thus making our hypothesis tests overconfident.  
+
+For RHS bias, we took this into consideration in our initial model development. One of the initial models we considered was using country of origin and altitude to predict total cup points. We soon realized that this would result in altitude as a RHS variable, as country can impact altitude and both altitude and country can impact total cup points. To overcome this, we instead used subregion in our models.  
+
+
+# Conclusion
+Tying this back to the original research question “How do geographical features such as altitude, climate and regional location affect coffee cup scores?”, we determined that our analysis was inconclusive and we are not confident that these features affect coffee cup scores.  
+
+Our top performing model (using altitude, subregion and tropical to determine cup points) suggests that there is a positive relationship between cup points and altitude, a positive relationship between total cup points and subregions Eastern Africa, Eastern Asia, and South America, and a negative relationship between total cup points and being partially tropical. However, even though this model had good statistical significance, we ultimately decided it is unreliable.
+
+There are many other factors we did not consider in this OLS regression model largely due to missing or inconsistent data. If we were to move forward with this research question, we would collect new data which accurately represents the coffee population and we would ensure data was complete and consistent across all reviewers
